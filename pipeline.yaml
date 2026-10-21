@@ -1,0 +1,65 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: juphc-tc-pipeline
+spec:
+  workspaces:
+    - name: pipeline-workspace
+    - name: dockerconfig-ws
+  params:
+    - name: build-image
+    - name: repo-url
+    - name: branch
+      default: main
+    - name: app-name
+  tasks:
+    - name: init
+      taskRef:
+        name: cleanup
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+    - name: clone
+      runAfter:
+        - init
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+        - name: output
+          workspace: pipeline-workspace
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch)
+    - name: npminstall
+      runAfter:
+        - clone
+      taskRef:
+        name: npminstall
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+    - name: tests
+      runAfter:
+        - npminstall
+      taskRef:
+        name: jasmine
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+    - name: build
+      runAfter:
+        - tests
+      taskRef:
+        name: buildah
+        kind: ClusterTask
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+        - name: dockerconfig
+          workspace: dockerconfig-ws
+      params:
+        - name: IMAGE
+          value: $(params.build-image)
